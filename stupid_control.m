@@ -31,18 +31,12 @@ while true
           old_vleft = vleft;
           old_error = error;
           error = ideal_distance - percepts(6);
-          delta_error = old_error - new_error;
-          if delta_error > 0
-              d_control = -1;
-          else
-              d_control = 1;
-          end
           if error > 50
-              delta_v = int8(error/50) + d_control;
+              delta_v = int8(error/50);
               delta_v = min(delta_v, 3);
-              turn(s, speed + delta_v, speed)
+              turn(s, speed + delta_v, speed);
           else if error < -50
-                  delta_v = int8(error/50) - d_control;
+                  delta_v = int8(error/50);
                   delta_v = max(delta_v, -3);
                   turn(s, speed + delta_v, speed)
               else
@@ -52,21 +46,15 @@ while true
        else if percepts(1) > 100
           old_vleft = vleft;
           old_error = error;
-          error = ideal_distance - percepts(6);
-          delta_error = old_error - new_error;
-          if delta_error > 0
-              d_control = -1;
-          else
-              d_control = 1;
-          end
+          error = ideal_distance - percepts(1);
           if error > 50
-              delta_v = int8(error/50) + d_control;
+              delta_v = int8(error/50);
               delta_v = min(delta_v, 3);
-              turn(s, speed + delta_v, speed)
+              turn(s, speed - delta_v, speed)
           else if error < -50
-                  delta_v = int8(error/50) - d_control;
+                  delta_v = int8(error/50);
                   delta_v = max(delta_v, -3);
-                  turn(s, speed + delta_v, speed)
+                  turn(s, speed - delta_v, speed)
               else
                   go(s, speed)
               end
