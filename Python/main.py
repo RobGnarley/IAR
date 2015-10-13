@@ -15,7 +15,8 @@ EXPLORE_SPEED = 4
 TURN_SPEED = 2
 WALL_SPEED = 2
 IDEAL_IR = 100
-K = 0.0001
+K1 = 0.0005
+K2 = 0.9
 
 def run():
 
@@ -24,9 +25,9 @@ def run():
 	s = open_connection()
 	set_counts(s, 0, 0)
 	current_state = STATES[0]
-	is_moving = False
 	turning = None
 	wall = None
+	error = 0
 	v_left = WALL_SPEED
 	v_right = WALL_SPEED
 
@@ -34,17 +35,13 @@ def run():
 
 		ir_sensors = read_IR(s)
 
-		if len(ir_sensors) < 8:
-			print "WARNING: IR sensors returned " + str(ir_sensors)
-			continue
-
 		print current_state
 
 		# BEGIN
 		if current_state == STATES[0]:
 
-			# Move Forward
-			is_moving = go_safe(s,EXPLORE_SPEED,is_moving)
+			
+			go(s,EXPLORE_SPEED)
 
 			# Explore
 			current_state = STATES[1]
@@ -52,8 +49,8 @@ def run():
 		# EXPLORE
 		elif current_state == STATES[1]:
 
-			# Move forward if not already
-			is_moving = go_safe(s,EXPLORE_SPEED,is_moving)
+			# Move forward
+			go(s,EXPLORE_SPEED)
 
 			if is_object_ahead(ir_sensors):
 				stop(s)
@@ -89,20 +86,17 @@ def run():
 					# Follow wall on left
 					wall = 'left'
 					current_state = STATES[3]
+					turning = None 
 			else:
 				# Otherwise turning left
 				if ir_sensors[5] < 100 and ir_sensors[3] < 70:
 					# Follow wall on right
 					wall = 'right'
 					current_state = STATES[3]
+					turning = None
 
+		# FOLLOW WALL
 		elif current_state == STATES[3]:
-
-			stop(s)
-
-			break
-
-			# PROP CONTROL NOT FINISHED
 
 			print "Following on " + wall
 
@@ -119,12 +113,15 @@ def run():
 				sign = 1
 				sensor = ir_sensors[5]
 
+			old_error = error
 			error = IDEAL_IR - sensor
+			delta_error = error - old_error
 
 			# Negative error - too close, drive away
 			# Postive error  - too far away, drive closer
 			
-			v_left = int(v_left + (K * error * sign))
+			delta_v_left = (K1 * error * sign) + (K2 * delta_error * sign)
+			v_left = int(v_left + delta_v_left)
 
 			if abs(v_left) > 15:
 				v_left = 2
@@ -133,20 +130,11 @@ def run():
 
 			print 'v_left: ' + str(v_left)
 
-			if sensor < 65:
+			#if sensor < 65:
 				# Lost wall, go back to exploring
-				current_state = STATES[1]
+				# current_state = STATES[1]
 
 		time.sleep(0.001)
-
-
-def go_safe(s, speed, is_moving):
-
-	if is_moving:
-		return is_moving
-	else:
-		go(s,speed)
-		return True
 
 def is_object_ahead(ir_sensors):
 

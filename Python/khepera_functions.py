@@ -87,7 +87,7 @@ def _parse_sensor_string(sensor_string) :
         # we need to remove some superfluous characters in the returned message
         sensor_string = sensor_string[2:-2]
         # and cast the comma separated sensor readings to integers
-        sensor_vals = [int(ss) for ss in sensor_string.split(",") if ss]
+        sensor_vals = [int(ss) for ss in sensor_string.split(",") if isinstance(ss, basestring)]
         return sensor_vals
 
 
