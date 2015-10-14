@@ -9,14 +9,22 @@
 # --------------------------------------
 
 from khepera_functions import *
+import math
+import matplotlib.pyplot as plt
+import numpy as np
 
 STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL']
 EXPLORE_SPEED = 4
 TURN_SPEED = 2
 WALL_SPEED = 2
 IDEAL_IR = 100
-K1 = 0.0005
-K2 = 0.9
+K1 = 0.001
+K2 = 0.1
+
+WHEEL_RADIUS = 0.008
+BODY_LENGTH = 53
+
+
 
 def run():
 
@@ -31,9 +39,58 @@ def run():
 	v_left = WALL_SPEED
 	v_right = WALL_SPEED
 
+	# ODOMETRY VARS
+	x = 0.0
+	y = 0.0
+	theta = 0.0
+	old_counters = read_counts(s)
+	total_distance = 0.0
+
+	# Setup matplotlib figure
+
+	plt.ion()
+	fig, ax = plt.subplots()
+	lines, = ax.plot([],[], 'o')
+	ax.set_autoscale_on(True)
+	ax.set_xlim(-10, 10)
+	xs = []
+	ys = []
+
 	while True:
 
 		ir_sensors = read_IR(s)
+
+		# ODOMETRY
+		counters = np.array([float(i) for i in read_counts(s)])
+
+		counters_step = counters - old_counters
+
+		arcs = counters_step * 0.08
+ 
+  		distance = 0.5 * (arcs[0] + arcs[1])
+  		total_distance = total_distance + distance
+  		theta = theta + (arcs[0] + arcs[1])/BODY_LENGTH
+  
+  		x = x + distance * math.sin(theta)
+  		y = y + distance * math.cos(theta)
+
+  		print 'x: ' + str(x)
+  		print 'y: ' + str(y)
+
+
+  		xs.append(x)
+  		ys.append(y)
+
+  		lines.set_xdata(xs)
+  		lines.set_ydata(ys)
+
+  		ax.relim()
+  		ax.autoscale_view()
+
+  		fig.canvas.draw()
+  		fig.canvas.flush_events()
+
+		old_counters = counters
 
 		print current_state
 
@@ -121,18 +178,18 @@ def run():
 			# Postive error  - too far away, drive closer
 			
 			delta_v_left = (K1 * error * sign) + (K2 * delta_error * sign)
-			v_left = int(v_left + delta_v_left)
+			v_left = v_left + delta_v_left
 
-			if abs(v_left) > 15:
-				v_left = 2
+			#if abs(v_left) > 8:
+				#v_left = 2
 
-			turn(s,v_left,v_right)
+			turn(s,int(v_left),v_right)
 
 			print 'v_left: ' + str(v_left)
 
-			#if sensor < 65:
+			if sensor < 65:
 				# Lost wall, go back to exploring
-				# current_state = STATES[1]
+				current_state = STATES[1]
 
 		time.sleep(0.001)
 
