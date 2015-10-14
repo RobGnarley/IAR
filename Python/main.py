@@ -13,7 +13,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 
-STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL']
+STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'HOME']
 EXPLORE_SPEED = 4
 TURN_SPEED = 2
 WALL_SPEED = 2
@@ -21,8 +21,8 @@ IDEAL_IR = 100
 K1 = 0.001
 K2 = 0.1
 
-WHEEL_RADIUS = 0.008
-BODY_LENGTH = 53
+WHEEL_RADIUS = 0.0082
+BODY_LENGTH = 52.17
 
 
 
@@ -50,15 +50,31 @@ def run():
 
 	plt.ion()
 	fig, ax = plt.subplots()
-	lines, = ax.plot([],[], 'o')
+	lines, = ax.plot([],[])
 	ax.set_autoscale_on(True)
-	ax.set_xlim(-10, 10)
 	xs = []
 	ys = []
 
+	# Time
+
+	START_TIME = time.clock()
+
 	while True:
 
-		ir_sensors = read_IR(s)
+		CURRENT_TIME = time.clock()
+
+		go_home = START_TIME + 30 < CURRENT_TIME
+
+		a = a + 1
+		b = b + 1
+
+		try:
+
+			ir_sensors = read_IR(s)
+
+		except ValueError:
+
+			continue
 
 		# ODOMETRY
 		counters = np.array([float(i) for i in read_counts(s)])
@@ -69,14 +85,13 @@ def run():
  
   		distance = 0.5 * (arcs[0] + arcs[1])
   		total_distance = total_distance + distance
-  		theta = theta + (arcs[0] + arcs[1])/BODY_LENGTH
+  		theta = theta + (arcs[1] - arcs[0])/BODY_LENGTH
   
-  		x = x + distance * math.sin(theta)
-  		y = y + distance * math.cos(theta)
+  		x = x + distance * math.cos(theta)
+  		y = y + distance * math.sin(theta)
 
   		print 'x: ' + str(x)
   		print 'y: ' + str(y)
-
 
   		xs.append(x)
   		ys.append(y)
@@ -98,13 +113,19 @@ def run():
 		if current_state == STATES[0]:
 
 			
+
 			go(s,EXPLORE_SPEED)
+
 
 			# Explore
 			current_state = STATES[1]
 
 		# EXPLORE
 		elif current_state == STATES[1]:
+
+			if go_home:
+				current_state = STATES[4]
+				continue
 
 			# Move forward
 			go(s,EXPLORE_SPEED)

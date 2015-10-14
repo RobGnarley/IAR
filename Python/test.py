@@ -4,17 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 s = open_connection()
-go(s,2)
-
-l = 0
-r = 0
+set_counts(s, 0, 0)
+go(s,1)
 
 while True:
 
-	old_l = l
-	old_r = r
+	encoders = read_counts(s)
 
-	[l,r] = read_counts(s)
-
-	print "Difference in L: " + str(l - old_l)
-	print "Difference in R: " + str(r - old_r)
+	print encoders
