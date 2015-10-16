@@ -13,7 +13,7 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 
-STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'HOME']
+STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'STOP']
 EXPLORE_SPEED = 4
 TURN_SPEED = 2
 WALL_SPEED = 2
@@ -63,10 +63,34 @@ def run():
 
 		CURRENT_TIME = time.clock()
 
-		go_home = START_TIME + 30 < CURRENT_TIME
+		print 'TIME: ' + str(CURRENT_TIME)
 
-		a = a + 1
-		b = b + 1
+		go_home = START_TIME + 20 < CURRENT_TIME
+
+		distance_home = math.sqrt(x**2 + y**2)
+		if distance_home < 200:
+			THRESHOLD = 8.0
+		else:
+			THRESHOLD = 16.0
+
+		print 'DISTANCE HOME: ' + str(distance_home)
+
+		# Find angle to home
+
+		home_theta = math.atan2(abs(y),abs(x))
+
+		if x < 0 and y < 0:
+			home_angle = home_theta
+		elif x >= 0 and y < 0:
+			home_angle = math.pi - home_theta
+		elif x >= 0 and y >= 0:
+			home_angle = math.pi + home_theta
+		else:
+			home_angle = 2*math.pi - home_theta
+
+		home_angle = home_angle % (2 * math.pi)
+
+		print 'Home Angle: ' + str(home_angle)
 
 		try:
 
@@ -86,12 +110,15 @@ def run():
   		distance = 0.5 * (arcs[0] + arcs[1])
   		total_distance = total_distance + distance
   		theta = theta + (arcs[1] - arcs[0])/BODY_LENGTH
+
+  		theta = theta % (2 * math.pi)
   
   		x = x + distance * math.cos(theta)
   		y = y + distance * math.sin(theta)
 
-  		print 'x: ' + str(x)
-  		print 'y: ' + str(y)
+  		#print 'x: ' + str(x)
+  		#print 'y: ' + str(y)
+  		#print 'theta: ' + str(theta)
 
   		xs.append(x)
   		ys.append(y)
@@ -124,11 +151,30 @@ def run():
 		elif current_state == STATES[1]:
 
 			if go_home:
-				current_state = STATES[4]
-				continue
 
-			# Move forward
-			go(s,EXPLORE_SPEED)
+				# Difference between home angle and current angle
+				psi = theta - home_angle
+
+				print 'PSI: ' + str(psi)
+
+				if distance_home < 20:
+
+					# STOP
+					current_state = STATES[4]
+
+				if abs(psi) < (math.pi / THRESHOLD):
+					go(s,EXPLORE_SPEED)
+				elif psi > math.pi:
+					#print 'TURN RIGHT'
+					turn(s,1,-1)
+				else:
+					#print 'TURN LEFT'
+					turn(s,-1,1)
+				
+			else:
+
+				# Move forward
+				go(s,EXPLORE_SPEED)
 
 			if is_object_ahead(ir_sensors):
 				stop(s)
@@ -211,6 +257,12 @@ def run():
 			if sensor < 65:
 				# Lost wall, go back to exploring
 				current_state = STATES[1]
+
+		else:
+
+			stop(s)
+
+			print 'I\'M HOME!!! OR UNBEARABLY LOST'
 
 		time.sleep(0.001)
 

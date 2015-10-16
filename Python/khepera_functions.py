@@ -30,7 +30,7 @@ def close_connection(s) :
         s.close()
 
 
-def send_command(s, command, verbose=True) :
+def send_command(s, command, verbose=False) :
     # we should check if we have built up a backlog of serial messages from the
     # Khepera. If there is a backlog, we should read out of the serial buffer
     # so that future communications aren't messed up.
