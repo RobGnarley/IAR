@@ -12,6 +12,8 @@ from khepera_functions import *
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import logging
+import sys
 
 STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'STOP']
 EXPLORE_SPEED = 4
@@ -22,9 +24,15 @@ K1 = 0.001
 K2 = 0.1
 
 WHEEL_RADIUS = 0.0082
-BODY_LENGTH = 52.17
+BODY_LENGTH = 52.1
+EXPLORE_TIME = 30
 
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.DEBUG)
+logger.addHandler(ch)
 
 def run():
 
@@ -59,21 +67,23 @@ def run():
 
 	START_TIME = time.clock()
 
+	sum_differences = 0
+
 	while True:
 
 		CURRENT_TIME = time.clock()
 
-		print 'TIME: ' + str(CURRENT_TIME)
+		#print 'TIME: ' + str(CURRENT_TIME)
 
-		go_home = START_TIME + 20 < CURRENT_TIME
+		go_home = START_TIME + EXPLORE_TIME < CURRENT_TIME
 
 		distance_home = math.sqrt(x**2 + y**2)
 		if distance_home < 200:
-			THRESHOLD = 8.0
-		else:
 			THRESHOLD = 16.0
+		else:
+			THRESHOLD = 32.0
 
-		print 'DISTANCE HOME: ' + str(distance_home)
+		#print 'DISTANCE HOME: ' + str(distance_home)
 
 		# Find angle to home
 
@@ -90,7 +100,7 @@ def run():
 
 		home_angle = home_angle % (2 * math.pi)
 
-		print 'Home Angle: ' + str(home_angle)
+		#print 'Home Angle: ' + str(home_angle)
 
 		try:
 
@@ -105,16 +115,30 @@ def run():
 
 		counters_step = counters - old_counters
 
+
 		arcs = counters_step * 0.08
- 
+ 		
   		distance = 0.5 * (arcs[0] + arcs[1])
   		total_distance = total_distance + distance
   		theta = theta + (arcs[1] - arcs[0])/BODY_LENGTH
 
   		theta = theta % (2 * math.pi)
-  
+
   		x = x + distance * math.cos(theta)
   		y = y + distance * math.sin(theta)
+
+
+		psi = theta - home_angle
+
+		if psi < math.pi/2.0:
+			home_dir = 'left'
+		elif psi > (3/2.0 * math.pi):
+			home_dir = 'right'
+		else:
+			home_dir = None
+
+		logger.debug('PSI: ' + str(psi))
+
 
   		#print 'x: ' + str(x)
   		#print 'y: ' + str(y)
@@ -134,15 +158,12 @@ def run():
 
 		old_counters = counters
 
-		print current_state
+		#print current_state
 
 		# BEGIN
 		if current_state == STATES[0]:
 
-			
-
-			go(s,EXPLORE_SPEED)
-
+			go(s, EXPLORE_SPEED)
 
 			# Explore
 			current_state = STATES[1]
@@ -153,10 +174,7 @@ def run():
 			if go_home:
 
 				# Difference between home angle and current angle
-				psi = theta - home_angle
-
-				print 'PSI: ' + str(psi)
-
+				
 				if distance_home < 20:
 
 					# STOP
@@ -222,7 +240,7 @@ def run():
 		# FOLLOW WALL
 		elif current_state == STATES[3]:
 
-			print "Following on " + wall
+			logger.info("Following on " + wall)
 
 			# Only changing speed of left wheel
 			# Hence the only change between the left
@@ -236,6 +254,12 @@ def run():
 				# else right
 				sign = 1
 				sensor = ir_sensors[5]
+
+			if go_home and (home_dir is None or wall != home_dir):
+				current_state = STATES[1]
+				continue
+
+
 
 			old_error = error
 			error = IDEAL_IR - sensor
@@ -264,7 +288,9 @@ def run():
 
 			print 'I\'M HOME!!! OR UNBEARABLY LOST'
 
-		time.sleep(0.001)
+		time.sleep(0.00001)
+
+
 
 def is_object_ahead(ir_sensors):
 

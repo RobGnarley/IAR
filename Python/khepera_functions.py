@@ -109,6 +109,12 @@ def read_counts(s) :
     count_string = send_command(s, "H")
     return _parse_sensor_string(count_string)
 
+def reach_position(s, left, right):
+    return send_command(s, "C," + str(int(left)) + "," + str(int(right)))
+
+def read_speed(s):
+    speed_string = send_command(s, "E")
+    return _parse_sensor_string(speed_string)
 
 if __name__ == "__main__" :
     # if this file is run as a script, it will run through some function calls
