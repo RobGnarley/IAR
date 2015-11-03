@@ -19,13 +19,17 @@ STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'STOP']
 EXPLORE_SPEED = 4
 TURN_SPEED = 2
 WALL_SPEED = 2
-IDEAL_IR = 100
-K1 = 0.001
-K2 = 0.1
+IDEAL_IR = 300
+#K1 = 0.001
+#K2 = 0.1
+#K1 = 0.0000005
+#K2 = 0.0001
+K1 = 0.0005
+K2 = 0
 
-WHEEL_RADIUS = 0.0082
-BODY_LENGTH = 52.1
-EXPLORE_TIME = 30
+WHEEL_RADIUS = 0.08
+BODY_LENGTH = 52.7
+EXPLORE_TIME = 90
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -38,8 +42,12 @@ def run():
 
 	''' main control loop '''
 
+
+	# Connect to Khepera
 	s = open_connection()
 	set_counts(s, 0, 0)
+
+	# Initialise variables
 	current_state = STATES[0]
 	turning = None
 	wall = None
@@ -67,28 +75,28 @@ def run():
 
 	START_TIME = time.clock()
 
-	sum_differences = 0
-
 	while True:
 
+
+		# Update time
 		CURRENT_TIME = time.clock()
 
-		#print 'TIME: ' + str(CURRENT_TIME)
-
+		# Check if going home
 		go_home = START_TIME + EXPLORE_TIME < CURRENT_TIME
 
+		# Calculate distance to home
 		distance_home = math.sqrt(x**2 + y**2)
 		if distance_home < 200:
-			THRESHOLD = 16.0
+			THRESHOLD = 8.0
 		else:
 			THRESHOLD = 32.0
 
-		#print 'DISTANCE HOME: ' + str(distance_home)
+		logging.debug('DISTANCE HOME: ' + str(distance_home))
 
 		# Find angle to home
-
 		home_theta = math.atan2(abs(y),abs(x))
 
+		# Find angle home in radians, counting counter-clockwise
 		if x < 0 and y < 0:
 			home_angle = home_theta
 		elif x >= 0 and y < 0:
@@ -100,8 +108,9 @@ def run():
 
 		home_angle = home_angle % (2 * math.pi)
 
-		#print 'Home Angle: ' + str(home_angle)
+		logging.debug('Home Angle: ' + str(home_angle))
 
+		# Read in IR sensor values, check for error
 		try:
 
 			ir_sensors = read_IR(s)
@@ -115,7 +124,6 @@ def run():
 
 		counters_step = counters - old_counters
 
-
 		arcs = counters_step * 0.08
  		
   		distance = 0.5 * (arcs[0] + arcs[1])
@@ -127,7 +135,7 @@ def run():
   		x = x + distance * math.cos(theta)
   		y = y + distance * math.sin(theta)
 
-
+  		# PSI = angle between home and current direction
 		psi = theta - home_angle
 
 		if psi < math.pi/2.0:
@@ -139,11 +147,7 @@ def run():
 
 		logger.debug('PSI: ' + str(psi))
 
-
-  		#print 'x: ' + str(x)
-  		#print 'y: ' + str(y)
-  		#print 'theta: ' + str(theta)
-
+		# Update graph
   		xs.append(x)
   		ys.append(y)
 
@@ -158,20 +162,26 @@ def run():
 
 		old_counters = counters
 
-		#print current_state
-
 		# BEGIN
 		if current_state == STATES[0]:
 
-			go(s, EXPLORE_SPEED)
+			#go(s, EXPLORE_SPEED)
 
 			# Explore
-			current_state = STATES[1]
+			#current_state = STATES[1]
 
+			# TEST - GO TO FOLLOW
+			current_state = STATES[3]
+			wall = 'left'
 		# EXPLORE
 		elif current_state == STATES[1]:
 
-			if go_home:
+			logger.info("Exploring")
+
+			#if go_home:
+			if False:
+
+				logger.info("And trying to get home")
 
 				# Difference between home angle and current angle
 				
@@ -182,29 +192,31 @@ def run():
 
 				if abs(psi) < (math.pi / THRESHOLD):
 					go(s,EXPLORE_SPEED)
-				elif psi > math.pi:
+					turning = None
+				elif psi > math.pi or turning == 'right':
 					#print 'TURN RIGHT'
 					turn(s,1,-1)
+					turning = 'right'
 				else:
 					#print 'TURN LEFT'
 					turn(s,-1,1)
-				
+					turning = 'left'
 			else:
 
 				# Move forward
 				go(s,EXPLORE_SPEED)
 
-			if is_object_ahead(ir_sensors):
+			if is_object_ahead(ir_sensors) and not turning:
 				stop(s)
 				# Avoid obstacle
 				current_state = STATES[2]
 
-			elif ir_sensors[0] > 120:
+			elif ir_sensors[0] > 100:
 				# Follow wall on left
 				wall = 'left'
 				current_state = STATES[3]
 
-			elif ir_sensors[5] > 120:
+			elif ir_sensors[5] > 100:
 				# Follow wall on left
 				wall = 'right'
 				current_state = STATES[3]
@@ -212,7 +224,7 @@ def run():
 		# AVOID
 		elif current_state == STATES[2]:
 
-			print "Avoiding"
+			logger.info("Avoiding")
 
 			if not turning:
 				if ir_sensors[2] > ir_sensors[3]:
@@ -255,15 +267,20 @@ def run():
 				sign = 1
 				sensor = ir_sensors[5]
 
-			if go_home and (home_dir is None or wall != home_dir):
-				current_state = STATES[1]
-				continue
+			#if go_home and (home_dir is None or wall != home_dir):
+				#current_state = STATES[1]
+				#if turning:
+					#stop(s)
+					#turning = None
+				#continue
 
 
 
 			old_error = error
 			error = IDEAL_IR - sensor
 			delta_error = error - old_error
+
+			print 'error: ' + str(error)
 
 			# Negative error - too close, drive away
 			# Postive error  - too far away, drive closer
@@ -278,15 +295,20 @@ def run():
 
 			print 'v_left: ' + str(v_left)
 
-			if sensor < 65:
+			#if sensor < 10:
 				# Lost wall, go back to exploring
-				current_state = STATES[1]
+				#current_state = STATES[1]
+				#if turning:
+					#stop(s)
+					#turning = None
 
 		else:
 
 			stop(s)
 
 			print 'I\'M HOME!!! OR UNBEARABLY LOST'
+
+			break
 
 		time.sleep(0.00001)
 
@@ -300,3 +322,5 @@ def is_object_ahead(ir_sensors):
 if __name__ == "__main__" :
 
 	run()
+
+	raw_input('Press ENTER to quit.')

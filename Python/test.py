@@ -5,7 +5,7 @@ import numpy as np
 
 s = open_connection()
 set_counts(s, 0, 0)
-go(s,1)
+turn(s,2,-2)
 
 while True:
 
