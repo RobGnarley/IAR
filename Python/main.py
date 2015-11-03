@@ -236,14 +236,14 @@ def run():
 					turning = 'left'
 					turn(s,-TURN_SPEED,TURN_SPEED)
 			elif turning == 'right':
-				if ir_sensors[0] < 100 and ir_sensors[2] < 70:
+				if ir_sensors[0] > 100 and ir_sensors[2] < 70:
 					# Follow wall on left
 					wall = 'left'
 					current_state = STATES[3]
 					turning = None 
 			else:
 				# Otherwise turning left
-				if ir_sensors[5] < 100 and ir_sensors[3] < 70:
+				if ir_sensors[5] > 100 and ir_sensors[3] < 70:
 					# Follow wall on right
 					wall = 'right'
 					current_state = STATES[3]
@@ -295,12 +295,12 @@ def run():
 
 			print 'v_left: ' + str(v_left)
 
-			#if sensor < 10:
+			if sensor < 10:
 				# Lost wall, go back to exploring
-				#current_state = STATES[1]
-				#if turning:
-					#stop(s)
-					#turning = None
+				current_state = STATES[1]
+				if turning:
+					stop(s)
+					turning = None
 
 		else:
 
