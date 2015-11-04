@@ -1,0 +1,36 @@
+
+Everything is now run through the file remain.py. It contians the main behaviours of exploring, avoiding and following walls. I left out the returning home code for now as we will have to think about our strategy for picking up food.
+
+The idea is that every time step you call the update method which will pick a behaviour and update the odometry. I wanted to keep the logic for picking behaviour away from the code for actually executing them because it was getting quite hard to work out how everything was interacting with each other. 
+
+Additionally I created a new class for our odometry drawing function. That way we can easily just add something that shuts it off if we want or what ever. 
+That one just has an update function as well that you add points to and then a static method for calculating the odometry.
+
+I changed how we do the wall following in that we will always use the wheel that is opposite to where the wall is now. This will have the effect that if we are close to the wall that wheel will slow down and maybe even stop which allows for very sharp turns if need be. This is good because when we were having one wheel just speed up we would often hit a wall but this way we are much less likely to do so.
+
+There are three main tasks to look at next. 
+* Blinking the LEDs
+ Hopefully that should be quite easy, there is probably a command that we can send, I haven't looked at this yet.
+ The idea is that we do the blinking when we have reached home
+* Detecting key strokes OR detecting being surounded by those tube parts
+ I think using keyboard input is probably easier, although it is surprisingly difficult to find a non blocking way to do it.
+ There is probably some Unix/Linux specific package that one can use, it is just about finding what it is.
+ This is for when we find the food
+* Creating an occupancy grid type map and moving through it
+ I'm not sure what the best strategy for getting food and what not is but I imagine that we will get report marks for implementing some of the stuff in the lectures. 
+ Maps are a good start. I think it should be fairly easy to create a static map by just having a numpy array that we hard code with the position of objects.
+ I think that can be done acceptably by just looking at the placement of things and try to measure the distance between them and then just have a binary array.
+ I've done an initialisation in mapping.py but didn't get very far. I counted the number of holes in the walls and used that as the unit. 
+ Potentially we want to say that each hole is two or 4 cells in our grid. Probably at least 2. 
+ Then we can just measure how many units away objects are and that kind of thing. 
+ When we have a map we should then try to plo our position on that map, we can pick the start position so I guess from a specific outset I would say. 
+ Then, when we have that we could maybe try to implement something like a particle filter so we can try to work out more accurately where we are. 
+ If we can do all of that we should be in a good spot
+
+* Oh, extra thing. We need to decide what our strategy is
+ My suggestion is that we remember the start position and then go exploring. 
+ When we find some food we reccord where it is and then just go home and then, as quickly as possible, go back and forth between the two spots. 
+ I think that is probably the most effective, especially if we can take into account where things are and thus try to avoid them as we go...
+ 
+
+
