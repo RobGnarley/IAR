@@ -36,21 +36,20 @@ class kheperam():
         #self.BODY_LENGTH = 52.7
         #self.EXPLORE_TIME = 90
         self.connection = open_connection()
-        #set_counts(self.connection, 0, 0)
+        set_counts(self.connection, 0, 0)
 
         # INTERNAL STATE VARS
         #self.turning = None
         self.error = 0
         self.v_left = self.WALL_SPEED
         self.v_right = self.WALL_SPEED
-
-        # ODOMETRY VARS
-        #x = 0.0
-        #y = 0.0
-        #theta = 0.0
-        #old_counters = read_counts(s)
-       # total_distance = 0.0
         
+        self.old_counters = [0,0]
+        self.x = 0
+        self.y = 0
+        self.theta = 0
+        self.graph = OdometryPlot()
+        self.graph.update(self.x, self.y) 
 
     def explore(self):
         go(self.connection, self.EXPLORE_SPEED)
@@ -112,6 +111,12 @@ class kheperam():
         except ValueError as e:
             logger.debug(e)
             return 
+        
+        self.x, self.y, self.theta = OdometryPlot.calc_odometry(counters, self.old_counters, self.x, self.y, self.theta)       
+
+        self.graph.update(self.x, self.y)    
+
+        self.old_counters = counters
 
         if ir_sensors[2] > 100 or ir_sensors[3] > 100 or self.state == 'AVOIDING':
             self.avoid(ir_sensors)
@@ -130,28 +135,46 @@ class kheperam():
 
 class OdometryPlot():
 
+
     def __init__(self):
         # Setup matplotlib figure
 
         plt.ion()
-        fig, ax = plt.subplots()
-        lines, = ax.plot([],[])
-        ax.set_autoscale_on(True)
-        xs = []
-        ys = []
+        self.fig, self.ax = plt.subplots()
+        self.lines, = self.ax.plot([],[])
+        self.ax.set_autoscale_on(True)
+        self.xs = []
+        self.ys = []
+
+    @staticmethod
+    def calc_odometry(counters, old_counters, x, y, theta):
+        BODY_LENGTH = 52.7
+        counters_step = counters - old_counters
+
+        arcs = counters_step * 0.08
+
+        distance = 0.5 * (arcs[0] + arcs[1])
+        theta = theta + (arcs[1] - arcs[0])/BODY_LENGTH
+        theta = theta % (2 * math.pi)
+
+        x = x + distance * math.cos(theta)
+        y = y + distance * math.sin(theta)
+        
+        return x, y, theta
+ 
 
     def update(self, x, y):
-        xs.append(x)
-        ys.append(y)
+        self.xs.append(x)
+        self.ys.append(y)
 
-        lines.set_xdata(xs)
-        lines.set_ydata(ys)
+        self.lines.set_xdata(self.xs)
+        self.lines.set_ydata(self.ys)
+        
+        self.ax.relim()
+        self.ax.autoscale_view()
 
-        ax.relim()
-        ax.autoscale_view()
-
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
 
 if __name__ == '__main__':
     robot = kheperam()    
@@ -159,5 +182,10 @@ if __name__ == '__main__':
         while True:
             robot.update()
     except KeyboardInterrupt:
+        stop(robot.connection)
+        sys.exit()
+
+    except Exception as e:
+        logger.warning(e)
         stop(robot.connection)
         sys.exit()
