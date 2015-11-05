@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import logging
 import sys
+import time
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -22,13 +23,11 @@ class kheperam():
         # If we are closer than 500 then there is very little distance for the robot to try to get closer 
         # while there is a lot of distance where it is "too close"
         # 700 might be a good value
-        self.IDEAL_IR = 400
-        #K1 = 0.001
-        #K2 = 0.1
-        #K1 = 0.0000005
-        #K2 = 0.0001
-        self.K1 = 0.0001
-        self.K2 = 0.001
+        self.IDEAL_IR = 700
+        #K1 = 0.0001
+        #K2 = 0.001
+        self.K1 = 0.0005
+        self.K2 = 0.015
 
         self.state = 'EXPLORING'
 
@@ -45,11 +44,62 @@ class kheperam():
         self.v_right = self.WALL_SPEED
         
         self.old_counters = [0,0]
+        # wall is either 'left', 'right' or None
+        self.wall = None
         self.x = 0
         self.y = 0
+        # current angle
         self.theta = 0
+        # angle to home
+        self.phi = np.pi
         self.graph = OdometryPlot()
-        self.graph.update(self.x, self.y) 
+        self.graph.update(self.x, self.y)
+        # Time elapsed since journey started
+        self.clock = 0
+        # Belief that robot is pointing home
+        self.pointing_home = False
+
+    def run(self, test=0):
+        """
+        Main control loop
+        """
+        START_TIME = time.time()
+        
+        if test == 0:
+            while True:
+                CURRENT_TIME = time.time()
+                self.clock = CURRENT_TIME - START_TIME
+                try:
+                    self.update()
+                except KeyboardInterrupt:
+                    stop(self.connection)
+                    #sys.exit()
+                    break
+                except Exception as e:
+                    logger.warning(e)
+                    stop(self.connection)
+                    #sys.exit()
+                    break
+        else:
+            # Use for testing
+            #while True:
+            #    try:
+            #        self.update_vars()
+            #        self.point_home()
+            #    except KeyboardInterrupt:
+            #        stop(self.connection)
+            #        #sys.exit()
+            #        break
+            while True:
+                turn(self.connection,-1,1)
+                try:
+                    self.update_vars()
+                    print 't' + str(self.theta)
+                    print 'ph' + str(self.phi)
+                except KeyboardInterrupt:
+                    stop(self.connection)
+                    #sys.exit()
+                    break
 
     def explore(self):
         go(self.connection, self.EXPLORE_SPEED)
@@ -60,10 +110,12 @@ class kheperam():
             self.v_right = self.WALL_SPEED
             self.state = 'FOLLOW WALL'
         if ir_sensors[0] > ir_sensors[5]:
-                wall = 'left'
+                if not self.wall:
+                    self.wall = 'left'
                 sensor = ir_sensors[0]
         else:
-                wall = 'right'
+                if not self.wall:
+                    self.wall = 'right'
                 sensor = ir_sensors[5]
 
         self.old_error = self.error
@@ -74,7 +126,7 @@ class kheperam():
         # Postive error  - too far away, drive closer
         delta_v = (self.K1 * self.error) + (self.K2 * delta_error)
         
-        if wall == 'left':
+        if self.wall == 'left':
             self.v_right = self.v_right + delta_v
         else:
             self.v_left = self.v_left + delta_v
@@ -86,6 +138,7 @@ class kheperam():
         if sensor < 10:
         # Lost wall, go back to exploring
             self.v_left = self.WALL_SPEED
+            self.wall = None
             self.state = 'EXPLORING'
  
 
@@ -103,35 +156,75 @@ class kheperam():
         if (ir_sensors[1] < 50 and ir_sensors[4] < 50) and ir_sensors[2] < 70 and ir_sensors[3] < 70:
             self.state = 'EXPLORING'
 
-
-
-    def update(self):
+    def update_vars(self):
         try:
             ir_sensors, counters = self.get_readings()
         except ValueError as e:
             logger.debug(e)
             return 
         
-        self.x, self.y, self.theta = OdometryPlot.calc_odometry(counters, self.old_counters, self.x, self.y, self.theta)       
-
-        self.graph.update(self.x, self.y)    
+        self.x, self.y, self.theta, self.phi = OdometryPlot.calc_odometry(counters, self.old_counters, self.x, self.y, self.theta)   
 
         self.old_counters = counters
 
-        if ir_sensors[2] > 100 or ir_sensors[3] > 100 or self.state == 'AVOIDING':
-            self.avoid(ir_sensors)
+        return ir_sensors
 
+    def update(self):
+        
+        ir_sensors = self.update_vars()
+        self.graph.update(self.x, self.y)
+
+        if ir_sensors[2] > 80 or ir_sensors[3] > 80 or self.state == 'AVOIDING':
+            self.avoid(ir_sensors)
+        #elif self.clock > 10 and not self.pointing_home:
+        #    stop(self.connection)
+        #    self.point_home()
         elif ir_sensors[0] > 50 or ir_sensors[5] > 50 or self.state == 'FOLLOW WALL':
             self.follow_wall(ir_sensors)
 
         else:
-            self.explore() 
+            self.explore()
+
+        logger.info(self.state)
+        logger.debug(self.wall)
+
+    def point_home(self):
+        """
+        Turn on the spot until pointing at home.
+        """
+        
+        error = (self.theta - self.phi) % (2*math.pi)
+
+        if error < (math.pi/16):
+            stop(self.connection)
+            return
+
+        if error > (math.pi / 2) and error < (3*math.pi/2):
+            turn_v = 2
+        else:
+            turn_v = 1 
+
+        if error > math.pi:
+            # turn left
+            turn(self.connection,-turn_v,turn_v)
+        else:
+            # turn right
+            turn(self.connection,turn_v,-turn_v)
+
+        if error < (math.pi/16):
+            stop(self.connection)
+
+        print error
+        
 
     def get_readings(self):
 
         ir_sensors = read_IR(self.connection) 
         counters = np.array([float(i) for i in read_counts(self.connection)])
         return ir_sensors, counters
+
+    def stop(self):
+        stop(self.connection)
 
 class OdometryPlot():
 
@@ -159,8 +252,11 @@ class OdometryPlot():
 
         x = x + distance * math.cos(theta)
         y = y + distance * math.sin(theta)
+
+        # angle home
+        phi = np.pi + math.atan2(y,x)
         
-        return x, y, theta
+        return x, y, theta, phi
  
 
     def update(self, x, y):
@@ -178,14 +274,4 @@ class OdometryPlot():
 
 if __name__ == '__main__':
     robot = kheperam()    
-    try:
-        while True:
-            robot.update()
-    except KeyboardInterrupt:
-        stop(robot.connection)
-        sys.exit()
-
-    except Exception as e:
-        logger.warning(e)
-        stop(robot.connection)
-        sys.exit()
+    robot.run()
