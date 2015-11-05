@@ -59,6 +59,8 @@ class kheperam():
         # Belief that robot is pointing home
         self.pointing_home = False
 
+        self.ambient = read_ambient(self.connection)
+
     def run(self, test=0):
         """
         Main control loop
@@ -90,17 +92,10 @@ class kheperam():
             #        stop(self.connection)
             #        #sys.exit()
             #        break
-            while True:
-                turn(self.connection,-1,1)
-                try:
-                    self.update_vars()
-                    print 't' + str(self.theta)
-                    print 'ph' + str(self.phi)
-                except KeyboardInterrupt:
-                    stop(self.connection)
-                    #sys.exit()
-                    break
-
+            ir = self.update_vars()
+            print 'ir: ' + str(ir)
+            print 'amb: ' + str(self.ambient)
+            
     def explore(self):
         go(self.connection, self.EXPLORE_SPEED)
 
@@ -158,7 +153,7 @@ class kheperam():
 
     def update_vars(self):
         try:
-            ir_sensors, counters = self.get_readings()
+            ir_sensors, counters, self.ambient = self.get_readings()
         except ValueError as e:
             logger.debug(e)
             return 
@@ -221,7 +216,8 @@ class kheperam():
 
         ir_sensors = read_IR(self.connection) 
         counters = np.array([float(i) for i in read_counts(self.connection)])
-        return ir_sensors, counters
+        amb = read_ambient(self.connection)
+        return ir_sensors, counters, amb
 
     def stop(self):
         stop(self.connection)
