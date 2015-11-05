@@ -222,6 +222,30 @@ class kheperam():
     def stop(self):
         stop(self.connection)
 
+    def distance_ahead(self, ir):
+        """
+        Calculate the distance between robot and object directly ahead.
+        Return -1 if no object detected.
+        Return 0 if ir sensors at full.
+
+        sensor = 136702 * exp(-0.47852 * distance)
+        """
+        ln_A = 11.83
+        k = -0.48
+
+        distances = (np.log(ir) - ln_A) / k
+
+        for i,sensor in enumerate(ir):
+            if sensor > 1000:
+                distances[i] = 0
+            elif sensor < 10:
+                distances[i] = -1
+
+        return distances
+
+
+
+
 class OdometryPlot():
 
 
