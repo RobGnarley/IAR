@@ -24,9 +24,23 @@ grid[-1, 16] = 1 # Light L-block on bottom left
 
 grid[-7:-5,16:18] = 1 # Circular block at end of L-block
 
+grid[5:10,17] = 1
+grid[5,16] = 1 # top left L block
 
+grid[13:18,23:28] = 1 # big central block
+grid[9:13,23:26] = 1 # block connected to central block
 
-print grid
+grid[-4:-3, -12:-7] =1 # bottom right gray blocks
+grid[-8:-3, -7] = 1
 
-plt.imshow(grid,interpolation='nearest')
+grid[-12:-10, -6:-4] = 1 # bottom right circle
+
+grid[-14:-12,-16:-12] = 1 # group of circles
+grid[-16:-14,-15:-13] = 1 
+
+grid[0:3,-20:-15] = 1 # Gray blocks top right
+grid[3:8, -16] = 1
+grid[7,-17] = 1 # While L top right
+
+plt.imshow(grid, cmap='Greys', interpolation='nearest')
 plt.show()
