@@ -1,10 +1,11 @@
 from khepera_functions import *
 import math
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 import logging
 import sys
 import time
+from odometry_plot import OdometryPlot
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -60,6 +61,10 @@ class kheperam():
         self.pointing_home = False
 
         self.ambient = read_ambient(self.connection)
+        self.graph.fig.canvas.mpl_connect('key_press_event', self.key_pressed)
+
+    def key_pressed(self, event):
+        self.blink()
 
     def run(self, test=0):
         """
@@ -75,13 +80,10 @@ class kheperam():
                     self.update()
                 except KeyboardInterrupt:
                     stop(self.connection)
-                    #sys.exit()
                     break
                 except Exception as e:
-                    logger.warning(e)
                     stop(self.connection)
-                    #sys.exit()
-                    break
+                    raise e
         else:
             # Use for testing
             #while True:
@@ -93,8 +95,6 @@ class kheperam():
             #        #sys.exit()
             #        break
             ir = self.update_vars()
-            print 'ir: ' + str(ir)
-            print 'amb: ' + str(self.ambient)
             
     def explore(self):
         go(self.connection, self.EXPLORE_SPEED)
@@ -156,7 +156,7 @@ class kheperam():
             ir_sensors, counters, self.ambient = self.get_readings()
         except ValueError as e:
             logger.debug(e)
-            return 
+            return self.update_vars()
         
         self.x, self.y, self.theta, self.phi = OdometryPlot.calc_odometry(counters, self.old_counters, self.x, self.y, self.theta)   
 
@@ -209,7 +209,6 @@ class kheperam():
         if error < (math.pi/16):
             stop(self.connection)
 
-        print error
         
 
     def get_readings(self):
@@ -221,6 +220,8 @@ class kheperam():
 
     def stop(self):
         stop(self.connection)
+        set_led(self.connection, 0, 0)
+        set_led(self.connection, 1, 0)
 
     def distance_ahead(self, ir):
         """
@@ -244,53 +245,20 @@ class kheperam():
         return distances
 
 
+    def blink(self):
+        self.stop()
+        sleep = 0.25
 
+        set_led(self.connection, 0, 1)
+        time.sleep(sleep)
+        for i in range(0,2):
+            set_led(self.connection, 1, 2)
+            set_led(self.connection, 0, 2)
+            time.sleep(sleep)
 
-class OdometryPlot():
+        set_led(self.connection, 1, 0)
+        set_led(self.connection, 0, 0)
 
-
-    def __init__(self):
-        # Setup matplotlib figure
-
-        plt.ion()
-        self.fig, self.ax = plt.subplots()
-        self.lines, = self.ax.plot([],[])
-        self.ax.set_autoscale_on(True)
-        self.xs = []
-        self.ys = []
-
-    @staticmethod
-    def calc_odometry(counters, old_counters, x, y, theta):
-        BODY_LENGTH = 52.7
-        counters_step = counters - old_counters
-
-        arcs = counters_step * 0.08
-
-        distance = 0.5 * (arcs[0] + arcs[1])
-        theta = theta + (arcs[1] - arcs[0])/BODY_LENGTH
-        theta = theta % (2 * math.pi)
-
-        x = x + distance * math.cos(theta)
-        y = y + distance * math.sin(theta)
-
-        # angle home
-        phi = np.pi + math.atan2(y,x)
-        
-        return x, y, theta, phi
- 
-
-    def update(self, x, y):
-        self.xs.append(x)
-        self.ys.append(y)
-
-        self.lines.set_xdata(self.xs)
-        self.lines.set_ydata(self.ys)
-        
-        self.ax.relim()
-        self.ax.autoscale_view()
-
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
 
 if __name__ == '__main__':
     robot = kheperam()    

@@ -116,6 +116,9 @@ def read_speed(s):
     speed_string = send_command(s, "E")
     return _parse_sensor_string(speed_string)
 
+def set_led(s, LED_num, action):
+    send_command(s, 'L,%d,%d' % (LED_num, action))
+
 if __name__ == "__main__" :
     # if this file is run as a script, it will run through some function calls
     s = open_connection()
