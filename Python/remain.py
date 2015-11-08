@@ -1,11 +1,11 @@
 from khepera_functions import *
 import math
-# import matplotlib.pyplot as plt
 import numpy as np
 import logging
 import sys
 import time
 from odometry_plot import OdometryPlot
+from collections import namedtuple
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -14,10 +14,12 @@ ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.DEBUG)
 logger.addHandler(ch)
 
+Point = namedtuple('Point', ['x', 'y'])
+
 class kheperam():
 
     def __init__(self):
-        STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'STOP']
+        STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'STOP', 'GETTING FOOD']
         self.EXPLORE_SPEED = 6
         self.TURN_SPEED = 3
         self.WALL_SPEED = 3
@@ -25,21 +27,15 @@ class kheperam():
         # while there is a lot of distance where it is "too close"
         # 700 might be a good value
         self.IDEAL_IR = 700
-        #K1 = 0.0001
-        #K2 = 0.001
         self.K1 = 0.0005
         self.K2 = 0.015
 
         self.state = 'EXPLORING'
 
-        #self.WHEEL_RADIUS = 0.08
-        #self.BODY_LENGTH = 52.7
-        #self.EXPLORE_TIME = 90
         self.connection = open_connection()
         set_counts(self.connection, 0, 0)
 
         # INTERNAL STATE VARS
-        #self.turning = None
         self.error = 0
         self.v_left = self.WALL_SPEED
         self.v_right = self.WALL_SPEED
@@ -53,7 +49,7 @@ class kheperam():
         self.theta = 0
         # angle to home
         self.phi = np.pi
-        self.graph = OdometryPlot()
+        self.graph = OdometryPlot(use_map = True)
         self.graph.update(self.x, self.y)
         # Time elapsed since journey started
         self.clock = 0
@@ -63,7 +59,15 @@ class kheperam():
         self.ambient = read_ambient(self.connection)
         self.graph.fig.canvas.mpl_connect('key_press_event', self.key_pressed)
 
+        self.has_food = False
+        self.food_at = None
+        self.home = Point(x=0, y=0)
+        self.target = self.home
+
     def key_pressed(self, event):
+        self.has_food = True
+        self.food_at = Point(x=self.x, y=self.y)
+        self.target = self.home
         self.blink()
 
     def run(self, test=0):
@@ -103,7 +107,8 @@ class kheperam():
         if self.state != 'FOLLOW WALL':
             self.v_left = self.WALL_SPEED
             self.v_right = self.WALL_SPEED
-            self.state = 'FOLLOW WALL'
+            if self.state != 'GETTING FOOD' or self.state != 'GOING HOME':
+                self.state = 'FOLLOW WALL' 
         if ir_sensors[0] > ir_sensors[5]:
                 if not self.wall:
                     self.wall = 'left'
@@ -158,7 +163,8 @@ class kheperam():
             logger.debug(e)
             return self.update_vars()
         
-        self.x, self.y, self.theta, self.phi = OdometryPlot.calc_odometry(counters, self.old_counters, self.x, self.y, self.theta)   
+        self.x, self.y, self.theta, self.phi = OdometryPlot.calc_odometry(
+                counters, self.old_counters, self.x, self.y, self.theta,self.target)   
 
         self.old_counters = counters
 
@@ -171,9 +177,8 @@ class kheperam():
 
         if ir_sensors[2] > 80 or ir_sensors[3] > 80 or self.state == 'AVOIDING':
             self.avoid(ir_sensors)
-        #elif self.clock > 10 and not self.pointing_home:
-        #    stop(self.connection)
-        #    self.point_home()
+        elif self.has_food or self.state == 'GETTING FOOD':
+            self.return_home(ir_sensors)
         elif ir_sensors[0] > 50 or ir_sensors[5] > 50 or self.state == 'FOLLOW WALL':
             self.follow_wall(ir_sensors)
 
@@ -192,12 +197,12 @@ class kheperam():
 
         if error < (math.pi/16):
             stop(self.connection)
-            return
+            raise DoneTurning('We have turned to within the error')
 
         if error > (math.pi / 2) and error < (3*math.pi/2):
-            turn_v = 2
+            turn_v = 3
         else:
-            turn_v = 1 
+            turn_v = 2 
 
         if error > math.pi:
             # turn left
@@ -206,10 +211,27 @@ class kheperam():
             # turn right
             turn(self.connection,turn_v,-turn_v)
 
-        if error < (math.pi/16):
-            stop(self.connection)
 
-        
+    def return_home(self, ir_sensors):
+        dir_target = 'left' if self.phi > math.pi else 'right'
+        if (dir_target == 'left' and ir_sensors[0] > 50) or (dir_target == 'right' and ir_sensors[5] > 50):
+            self.follow_wall(ir_sensors)
+            return
+
+        distance_error = abs(self.target.x - self.x) + abs(self.target.y - self.y)
+        if distance_error < 5 and self.has_food:
+            self.blink()
+            self.has_food = False
+            self.target = self.food_at
+            self.state = 'GETTING FOOD'
+            return
+        elif distance_error < 5:
+            self.state = 'EXPLORING'
+            return
+        try:
+            self.point_home()
+        except DoneTurning:
+            go(self.connection, self.EXPLORE_SPEED)  
 
     def get_readings(self):
 
@@ -244,6 +266,17 @@ class kheperam():
 
         return distances
 
+    def spiral(self):
+        logger.debug(self.spiral_count)
+        if self.spiral_count < 300:
+            turn(self.connection, 10, 2)
+            self.spiral_count += 1
+        elif self.spiral_count < 600:
+            turn(self.connection, 2, 10)
+            self.spiral_count += 1 
+        else:
+            stop(self.connection)
+            self.spiral_count = 0
 
     def blink(self):
         self.stop()
@@ -259,6 +292,8 @@ class kheperam():
         set_led(self.connection, 1, 0)
         set_led(self.connection, 0, 0)
 
+class DoneTurning(Exception):
+    pass
 
 if __name__ == '__main__':
     robot = kheperam()    

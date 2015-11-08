@@ -42,5 +42,10 @@ grid[0:3,-20:-15] = 1 # Gray blocks top right
 grid[3:8, -16] = 1
 grid[7,-17] = 1 # While L top right
 
-plt.imshow(grid, cmap='Greys', interpolation='nearest')
-plt.show()
+dim_y = 140
+dim_x = 77
+inc_y = 140/52.0
+inc_x = 77/30.0
+#print inc_x, inc_y
+#plt.imshow(grid, cmap='Greys', interpolation='nearest')
+#plt.show()
