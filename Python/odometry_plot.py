@@ -61,4 +61,13 @@ class OdometryPlot():
 
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
+    
+    def plot_particles(self, particles):
+        xs, ys = []
 
+        for pose in particles:
+            xs.append(pose.x)
+            ys.append(pose.y)
+
+        
+    
