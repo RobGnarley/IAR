@@ -19,7 +19,7 @@ Point = namedtuple('Point', ['x', 'y'])
 class kheperam():
 
     def __init__(self):
-        STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'STOP', 'GETTING FOOD']
+        STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'STOP', 'GETTING FOOD','GOING HOME']
         self.EXPLORE_SPEED = 6
         self.TURN_SPEED = 3
         self.WALL_SPEED = 3
@@ -27,8 +27,8 @@ class kheperam():
         # while there is a lot of distance where it is "too close"
         # 700 might be a good value
         self.IDEAL_IR = 700
-        self.K1 = 0.0005
-        self.K2 = 0.015
+        self.K1 = 0.0001
+        self.K2 = 0.019
 
         self.state = 'EXPLORING'
 
@@ -63,8 +63,13 @@ class kheperam():
         self.food_at = None
         self.home = Point(x=0, y=0)
         self.target = self.home
+        self.turning_home = False
+        self.avoiding = False
+
+        self.avoided_counter = 0
 
     def key_pressed(self, event):
+        self.state = 'GOING HOME'
         self.has_food = True
         self.food_at = Point(x=self.x, y=self.y)
         self.target = self.home
@@ -107,7 +112,7 @@ class kheperam():
         if self.state != 'FOLLOW WALL':
             self.v_left = self.WALL_SPEED
             self.v_right = self.WALL_SPEED
-            if self.state != 'GETTING FOOD' or self.state != 'GOING HOME':
+            if self.state == 'EXPLORING':
                 self.state = 'FOLLOW WALL' 
         if ir_sensors[0] > ir_sensors[5]:
                 if not self.wall:
@@ -142,19 +147,20 @@ class kheperam():
             self.state = 'EXPLORING'
  
 
-    def avoid(self, ir_sensors):
+    def avoid(self, ir_sensors, distances):
         """call this when an obstacle is detected. It will set the current state to avoiding.
         once the correct sensor readings are found it will leave the state into the generic explore state """
-        if self.state != 'AVOIDING':
-            self.state == 'AVOIDNING'
-            if ir_sensors[2] > ir_sensors[3]: # We could go back to using a more clever choice here
+        if not self.avoiding:
+            self.avoiding = True
+            if sum(distances[0:2]) < sum(distances[3:5]): # We could go back to using a more clever choice here
                 # Turn right
                 turn(self.connection,self.TURN_SPEED,-self.TURN_SPEED)
             else:
                 # Turn left
                 turn(self.connection,-self.TURN_SPEED,self.TURN_SPEED)
-        if (ir_sensors[1] < 50 and ir_sensors[4] < 50) and ir_sensors[2] < 70 and ir_sensors[3] < 70:
-            self.state = 'EXPLORING'
+        if self.logic_or([x > 50  for x in distances[1:4]]):
+            self.avoiding = False
+            self.avoided_counter = 5
 
     def update_vars(self):
         try:
@@ -175,28 +181,45 @@ class kheperam():
         ir_sensors = self.update_vars()
         self.graph.update(self.x, self.y)
 
-        if ir_sensors[2] > 80 or ir_sensors[3] > 80 or self.state == 'AVOIDING':
-            self.avoid(ir_sensors)
-        elif self.has_food or self.state == 'GETTING FOOD':
-            self.return_home(ir_sensors)
-        elif ir_sensors[0] > 50 or ir_sensors[5] > 50 or self.state == 'FOLLOW WALL':
-            self.follow_wall(ir_sensors)
+        distances = self.get_distances(ir_sensors)
 
+        #if self.avoided_counter > 0:
+        #    self.avoided_counter -= 1
+        if (self.logic_or([x < 100 for x in distances[1:4]]) or self.avoiding) and not self.turning_home:
+            self.avoid(ir_sensors, distances)
+            print 'AVOIDING'
+        elif self.has_food or self.state == 'GETTING FOOD':
+            self.return_home(ir_sensors,distances)
+        #elif ir_sensors[0] > 50 or ir_sensors[5] > 50 or self.state == 'FOLLOW WALL':
+        elif self.logic_or([x < 100 for x in distances]):
+            self.follow_wall(ir_sensors)
         else:
+            self.state = 'EXPLORING'
             self.explore()
 
         logger.info(self.state)
         logger.debug(self.wall)
 
+    def logic_or(self,xs):
+
+        for x in xs:
+            if x:
+                return True
+
+        return False
+
     def point_home(self):
         """
         Turn on the spot until pointing at home.
         """
+
+        self.turning_home = True
         
         error = (self.theta - self.phi) % (2*math.pi)
 
         if error < (math.pi/16):
             stop(self.connection)
+            self.turning_home = False
             raise DoneTurning('We have turned to within the error')
 
         if error > (math.pi / 2) and error < (3*math.pi/2):
@@ -212,11 +235,21 @@ class kheperam():
             turn(self.connection,turn_v,-turn_v)
 
 
-    def return_home(self, ir_sensors):
+    def return_home(self, ir_sensors, distances):
+
         dir_target = 'left' if self.phi > math.pi else 'right'
-        if (dir_target == 'left' and ir_sensors[0] > 50) or (dir_target == 'right' and ir_sensors[5] > 50):
+
+        #if (self.phi > 3 * math.pi / 4.0 and self.phi < (5*math.pi) / 4.0) or self.phi < math.pi / 4.0 or self.phi > 7 * math.pi / 4.0 :
+        #    dir_target = None
+
+        print 'dir_target: ' + str(dir_target)
+
+        if (dir_target == 'left' and (distances[0] < 100 or distances[1] < 100) ) or (dir_target == 'right' and (distances[4] < 100 or distances[5] < 100)):
             self.follow_wall(ir_sensors)
+            print 'FOLLOWED WALL WITH FOOD'
             return
+
+        self.wall = None
 
         distance_error = abs(self.target.x - self.x) + abs(self.target.y - self.y)
         if distance_error < 5 and self.has_food:
@@ -245,7 +278,7 @@ class kheperam():
         set_led(self.connection, 0, 0)
         set_led(self.connection, 1, 0)
 
-    def distance_ahead(self, ir):
+    def get_distances(self, ir):
         """
         Calculate the distance between robot and object directly ahead.
         Return -1 if no object detected.
@@ -262,7 +295,8 @@ class kheperam():
             if sensor > 1000:
                 distances[i] = 0
             elif sensor < 10:
-                distances[i] = -1
+                # far away (no reading)
+                distances[i] = 1000
 
         return distances
 
