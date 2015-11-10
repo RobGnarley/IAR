@@ -16,7 +16,7 @@ logger.addHandler(ch)
 
 Point = namedtuple('Point', ['x', 'y'])
 
-class Kheperam():
+class Kheperam(object):
 
     def __init__(self):
         STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'STOP', 'GETTING FOOD','GOING HOME']
@@ -215,7 +215,7 @@ class Kheperam():
 
     def detect_ahead(self):
 
-        return self.logic_or([x < 100 for x in self.distances[1:4]])
+        return self.logic_or([x < 50 for x in self.distances[1:4]])
 
     def point_home(self):
         """

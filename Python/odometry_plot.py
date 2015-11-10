@@ -36,14 +36,14 @@ class OdometryPlot():
         x = x + distance * math.cos(theta)
         y = y + distance * math.sin(theta)
 
-        # angle home
+        # angle to target
         phi = np.pi + math.atan2(y-target.y,x-target.x)
 
         return x, y, theta, phi
 
     def update(self, x, y):
         if self.use_map:
-            y = y/(770/30.0)
+            y = -y/(770/30.0)
             x = x/(1400/52.0)
             print x, y
             x = x + 25
