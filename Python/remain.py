@@ -16,7 +16,7 @@ logger.addHandler(ch)
 
 Point = namedtuple('Point', ['x', 'y'])
 
-class kheperam():
+class Kheperam():
 
     def __init__(self):
         STATES = ['BEGIN', 'EXPLORE', 'AVOID', 'FOLLOW_WALL', 'STOP', 'GETTING FOOD','GOING HOME']
@@ -41,6 +41,8 @@ class kheperam():
         self.v_right = self.WALL_SPEED
         
         self.old_counters = [0,0]
+        self.ir_sensors = []
+        self.distances = []
         # wall is either 'left', 'right' or None
         self.wall = None
         self.x = 0
@@ -174,18 +176,21 @@ class kheperam():
 
         self.old_counters = counters
 
-        return ir_sensors
+        self.ir_sensors = ir_sensors
+
+        self.distances = self.get_distances(ir_sensors)
 
     def update(self):
         
-        ir_sensors = self.update_vars()
-        self.graph.update(self.x, self.y)
+        self.update_vars()
+        ir_sensors = self.ir_sensors
+        distances = self.distances
 
-        distances = self.get_distances(ir_sensors)
+        self.graph.update(self.x, self.y)
 
         #if self.avoided_counter > 0:
         #    self.avoided_counter -= 1
-        if (self.logic_or([x < 100 for x in distances[1:4]]) or self.avoiding) and not self.turning_home:
+        if (self.detect_ahead() or self.avoiding) and not self.turning_home:
             self.avoid(ir_sensors, distances)
             print 'AVOIDING'
         elif self.has_food or self.state == 'GETTING FOOD':
@@ -207,6 +212,10 @@ class kheperam():
                 return True
 
         return False
+
+    def detect_ahead(self):
+
+        return self.logic_or([x < 100 for x in self.distances[1:4]])
 
     def point_home(self):
         """
@@ -330,5 +339,5 @@ class DoneTurning(Exception):
     pass
 
 if __name__ == '__main__':
-    robot = kheperam()    
+    robot = Kheperam()    
     robot.run()
